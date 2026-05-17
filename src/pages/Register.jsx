@@ -6,6 +6,7 @@ import {
   message,
   Typography,
   Divider,
+  Select,
 } from "antd";
 import {
   MailOutlined,
@@ -16,11 +17,13 @@ import { supabase } from "../supabaseClient";
 import { useNavigate, Link } from "react-router-dom";
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 function Register() {
   const navigate = useNavigate();
+  const [form] = Form.useForm();
 
-  const onFinish = async ({ email, password }) => {
+  const onFinish = async ({ email, password, role }) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -32,22 +35,32 @@ function Register() {
         return;
       }
 
-      const user = data.user;
-
-      if (!user) {
-        message.error("User topilmadi");
+      if (!data?.user) {
+        message.error("Foydalanuvchi yaratilmadi");
         return;
       }
 
-      await supabase.from("profiles").insert([
-        {
-          id: user.id,
-          role: "user",
-        },
-      ]);
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({
+          id: data.user.id,
+          role,
+        });
 
-      message.success("Ro‘yxatdan o‘tildi");
-      navigate("/login");
+      if (profileError) {
+        message.error(profileError.message);
+        return;
+      }
+
+      message.success("Ro‘yxatdan muvaffaqiyatli o‘tildi!");
+
+      form.resetFields();
+
+      if (role === "seller") {
+        navigate("/dashboard");
+      } else {
+        navigate("/");
+      }
 
     } catch (err) {
       console.log(err);
@@ -82,7 +95,11 @@ function Register() {
           </Title>
         </div>
 
-        <Form layout="vertical" onFinish={onFinish}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+        >
           <Form.Item
             name="email"
             label={<span style={{ color: "#fff" }}>Email</span>}
@@ -107,6 +124,17 @@ function Register() {
             />
           </Form.Item>
 
+          <Form.Item
+            name="role"
+            label={<span style={{ color: "#fff" }}>Akkount turi</span>}
+            initialValue="user"
+          >
+            <Select size="large">
+              <Option value="user">Tourist / Buyer</Option>
+              <Option value="seller">Seller</Option>
+            </Select>
+          </Form.Item>
+
           <Button
             htmlType="submit"
             type="primary"
@@ -118,16 +146,10 @@ function Register() {
           </Button>
         </Form>
 
-        <Divider style={{ borderColor: "rgba(255,255,255,0.12)" }} />
+        <Divider />
 
         <div style={{ textAlign: "center" }}>
-          <Link
-            to="/login"
-            style={{
-              color: "#fff",
-              fontWeight: 600,
-            }}
-          >
+          <Link to="/login" style={{ color: "#fff" }}>
             Login
           </Link>
         </div>
@@ -148,7 +170,6 @@ const submitBtn = {
   borderRadius: 14,
   background: "#8B5E3C",
   border: "none",
-  fontWeight: 600,
 };
 
 export default Register;

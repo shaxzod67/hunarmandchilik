@@ -11,46 +11,60 @@ import {
   Empty,
   Space,
   Tag,
+  Skeleton,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
 } from "antd";
 import {
   DeleteOutlined,
+  EditOutlined,
   ShoppingOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 function SellerProducts() {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [form] = Form.useForm();
 
   useEffect(() => {
     fetchMine();
   }, []);
 
   const fetchMine = async () => {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.log(error);
-    } else {
+      if (error) throw error;
+
       setItems(data || []);
+    } catch (err) {
+      console.log(err);
+      message.error("Mahsulotlarni yuklashda xatolik");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleDelete = async (id, imageUrl) => {
@@ -70,26 +84,69 @@ function SellerProducts() {
           .remove([fileName]);
       }
 
-      message.success("Mahsulot o‘chirildi");
-
       setItems((prev) => prev.filter((item) => item.id !== id));
 
+      message.success("Mahsulot o‘chirildi");
     } catch (err) {
       console.log(err);
       message.error("O‘chirishda xatolik");
     }
   };
 
+  const openEdit = (product) => {
+    setSelectedProduct(product);
+
+    form.setFieldsValue({
+      title: product.title,
+      description: product.description,
+      price: product.price,
+    });
+
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async (values) => {
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({
+          title: values.title,
+          description: values.description,
+          price: values.price,
+        })
+        .eq("id", selectedProduct.id);
+
+      if (error) throw error;
+
+      message.success("Mahsulot yangilandi");
+
+      setEditOpen(false);
+
+      fetchMine();
+
+    } catch (err) {
+      console.log(err);
+      message.error("Yangilashda xatolik");
+    }
+  };
+
+  if (loading) {
+    return (
+      <Row gutter={[24, 24]}>
+        {[1, 2, 3, 4].map((i) => (
+          <Col xs={24} sm={12} md={8} lg={6} key={i}>
+            <Card style={cardStyle}>
+              <Skeleton active />
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    );
+  }
+
   if (!loading && items.length === 0) {
     return (
-      <Card
-        style={{
-          borderRadius: 24,
-          background: "rgba(255,255,255,0.06)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          backdropFilter: "blur(20px)",
-        }}
-      >
+      <Card style={emptyCard}>
         <Empty
           description={
             <span style={{ color: "#FFFFFF" }}>
@@ -102,7 +159,7 @@ function SellerProducts() {
   }
 
   return (
-    <div>
+    <>
       <div style={{ marginBottom: 24 }}>
         <Title
           level={3}
@@ -119,7 +176,7 @@ function SellerProducts() {
             color: "rgba(255,255,255,0.65)",
           }}
         >
-          Marketplace’dagi barcha aktiv listinglaringiz
+          Marketplace’dagi barcha aktiv mahsulotlaringiz
         </Text>
       </div>
 
@@ -144,14 +201,7 @@ function SellerProducts() {
                   }}
                 />
               }
-              style={{
-                borderRadius: 24,
-                overflow: "hidden",
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                backdropFilter: "blur(18px)",
-                boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
-              }}
+              style={cardStyle}
             >
               <Space
                 direction="vertical"
@@ -159,11 +209,12 @@ function SellerProducts() {
                 style={{ width: "100%" }}
               >
                 <Tag
-                  color="gold"
                   style={{
-                    borderRadius: 10,
+                    background: "#8B5E3C",
+                    color: "#fff",
+                    border: "none",
                     padding: "6px 12px",
-                    fontWeight: 600,
+                    borderRadius: 10,
                     width: "fit-content",
                   }}
                 >
@@ -182,6 +233,14 @@ function SellerProducts() {
 
                 <Text
                   style={{
+                    color: "rgba(255,255,255,0.65)",
+                  }}
+                >
+                  {product.description || "Mahsulot tavsifi"}
+                </Text>
+
+                <Text
+                  style={{
                     color: "#8B5E3C",
                     fontSize: 22,
                     fontWeight: 700,
@@ -189,6 +248,19 @@ function SellerProducts() {
                 >
                   ${product.price}
                 </Text>
+
+                <Button
+                  icon={<EditOutlined />}
+                  block
+                  style={{
+                    height: 44,
+                    borderRadius: 14,
+                    fontWeight: 600,
+                  }}
+                  onClick={() => openEdit(product)}
+                >
+                  Edit
+                </Button>
 
                 <Popconfirm
                   title="Mahsulotni o‘chirasizmi?"
@@ -203,7 +275,7 @@ function SellerProducts() {
                     icon={<DeleteOutlined />}
                     block
                     style={{
-                      height: 46,
+                      height: 44,
                       borderRadius: 14,
                       fontWeight: 600,
                     }}
@@ -216,8 +288,77 @@ function SellerProducts() {
           </Col>
         ))}
       </Row>
-    </div>
+
+      <Modal
+        open={editOpen}
+        onCancel={() => setEditOpen(false)}
+        footer={null}
+        title="Mahsulotni tahrirlash"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleUpdate}
+        >
+          <Form.Item
+            name="title"
+            label="Mahsulot nomi"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="Tavsif"
+          >
+            <TextArea rows={4} />
+          </Form.Item>
+
+          <Form.Item
+            name="price"
+            label="Narx"
+            rules={[{ required: true }]}
+          >
+            <InputNumber
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+
+          <Button
+            htmlType="submit"
+            type="primary"
+            block
+            icon={<ShoppingOutlined />}
+            style={{
+              background: "#8B5E3C",
+              border: "none",
+              height: 46,
+              borderRadius: 14,
+            }}
+          >
+            Yangilash
+          </Button>
+        </Form>
+      </Modal>
+    </>
   );
 }
+
+const cardStyle = {
+  borderRadius: 24,
+  overflow: "hidden",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backdropFilter: "blur(18px)",
+  boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+};
+
+const emptyCard = {
+  borderRadius: 24,
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backdropFilter: "blur(20px)",
+};
 
 export default SellerProducts;

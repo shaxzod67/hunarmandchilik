@@ -8,6 +8,8 @@ import {
   LogoutOutlined,
   DashboardOutlined,
   HomeOutlined,
+  ShoppingCartOutlined,
+  OrderedListOutlined,
 } from "@ant-design/icons";
 
 const { Title } = Typography;
@@ -90,10 +92,22 @@ function Navbar() {
             <HomeOutlined /> Home
           </Button>
 
-          {session && role === "seller" && (
-            <Button onClick={() => navigate("/dashboard")}>
-              <DashboardOutlined /> Dashboard
+          {session && role === "user" && (
+            <Button onClick={() => navigate("/my-orders")}>
+              <ShoppingCartOutlined /> My Orders
             </Button>
+          )}
+
+          {session && role === "seller" && (
+            <>
+              <Button onClick={() => navigate("/dashboard")}>
+                <DashboardOutlined /> Dashboard
+              </Button>
+
+              <Button onClick={() => navigate("/seller-orders")}>
+                <OrderedListOutlined /> Orders
+              </Button>
+            </>
           )}
 
           {!session ? (
