@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
-import { Button, Space, Typography } from "antd";
+import { Button, Space, Typography, Badge } from "antd";
 import {
   LoginOutlined,
   UserAddOutlined,
@@ -18,6 +18,7 @@ function Navbar() {
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [role, setRole] = useState(null);
+  const [cartCount, setCartCount] = useState(0);
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
@@ -35,6 +36,7 @@ function Navbar() {
 
       if (data.session?.user) {
         loadProfile(data.session.user.id);
+        fetchCartCount(data.session.user.id);
       }
     });
 
@@ -45,14 +47,48 @@ function Navbar() {
 
       if (session?.user) {
         loadProfile(session.user.id);
+        fetchCartCount(session.user.id);
       } else {
         setRole(null);
       }
     });
+    const channel = supabase
+      .channel("cart-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cart",
+        },
+        async () => {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
 
-    return () => subscription.unsubscribe();
+          if (user) {
+            fetchCartCount(user.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+      supabase.removeChannel(channel);
+    };
   }, []);
+  const fetchCartCount = async (userId) => {
+    const { count } = await supabase
+      .from("cart")
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq("user_id", userId);
 
+    setCartCount(count || 0);
+  };
   const logout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
@@ -91,6 +127,11 @@ function Navbar() {
           <Button onClick={() => navigate("/")}>
             <HomeOutlined /> Home
           </Button>
+          <Badge count={cartCount} size="small" offset={[-2, 6]}>
+            <Button onClick={() => navigate("/cart")}>
+              <ShoppingCartOutlined /> Cart
+            </Button>
+          </Badge>
 
           {session && role === "user" && (
             <Button onClick={() => navigate("/my-orders")}>
